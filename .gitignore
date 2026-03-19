@@ -1,0 +1,18 @@
+# Large data files
+viral_reads/
+host_removed/
+viral_assembly/
+host_ref/
+
+# Snakemake
+.snakemake/
+
+# Logs
+logs/
+
+# Python
+__pycache__/
+*.pyc
+
+# Mac
+.DS_Store
