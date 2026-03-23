@@ -1,0 +1,162 @@
+configfile: "config_viral.yaml"
+
+SAMPLES = config["samples"]
+READS   = config["reads_dir"]
+
+rule all:
+    input:
+        expand("viral_qc/fastqc/{sample}_{read}_fastqc.html",
+               sample=SAMPLES, read=["R1","R2"]),
+        expand("host_removed/{sample}_R1.fastq.gz", sample=SAMPLES),
+        expand("viral_assembly/{sample}/contigs.fasta", sample=SAMPLES),
+        expand("viral_classification/{sample}/report.txt", sample=SAMPLES),
+        expand("viral_assembly/{sample}/quast/report.html", sample=SAMPLES)
+
+
+rule fastqc:
+    input:
+        r1 = READS + "/{sample}_R1.fastq.gz",
+        r2 = READS + "/{sample}_R2.fastq.gz"
+    output:
+        html_r1 = "viral_qc/fastqc/{sample}_R1_fastqc.html",
+        html_r2 = "viral_qc/fastqc/{sample}_R2_fastqc.html",
+        zip_r1  = "viral_qc/fastqc/{sample}_R1_fastqc.zip",
+        zip_r2  = "viral_qc/fastqc/{sample}_R2_fastqc.zip"
+    threads: 2
+    log:
+        "logs/viral_fastqc/{sample}.log"
+    shell:
+        """
+        fastqc {input.r1} {input.r2} \
+            --outdir viral_qc/fastqc/ \
+            --threads {threads} \
+            2> {log}
+        """
+
+
+rule trim:
+    input:
+        r1 = READS + "/{sample}_R1.fastq.gz",
+        r2 = READS + "/{sample}_R2.fastq.gz"
+    output:
+        r1          = "host_removed/{sample}_trimmed_R1.fastq.gz",
+        r2          = "host_removed/{sample}_trimmed_R2.fastq.gz",
+        r1_unpaired = "host_removed/{sample}_trimmed_R1_unpaired.fastq.gz",
+        r2_unpaired = "host_removed/{sample}_trimmed_R2_unpaired.fastq.gz"
+    params:
+        sw       = config["trimmomatic"]["sliding_window"],
+        minlen   = config["trimmomatic"]["min_len"],
+        leading  = config["trimmomatic"]["leading"],
+        trailing = config["trimmomatic"]["trailing"]
+    threads: 4
+    log:
+        "logs/viral_trim/{sample}.log"
+    shell:
+        """
+        trimmomatic PE \
+            -threads {threads} \
+            {input.r1} {input.r2} \
+            {output.r1} {output.r1_unpaired} \
+            {output.r2} {output.r2_unpaired} \
+            LEADING:{params.leading} \
+            TRAILING:{params.trailing} \
+            SLIDINGWINDOW:{params.sw} \
+            MINLEN:{params.minlen} \
+            2> {log}
+        """
+
+
+rule remove_host:
+    input:
+        r1 = "host_removed/{sample}_trimmed_R1.fastq.gz",
+        r2 = "host_removed/{sample}_trimmed_R2.fastq.gz"
+    output:
+        r1 = "host_removed/{sample}_R1.fastq.gz",
+        r2 = "host_removed/{sample}_R2.fastq.gz"
+    params:
+        index = config["host"]["index"]
+    threads: 4
+    log:
+        "logs/bowtie2/{sample}.log"
+    shell:
+        """
+        bowtie2 \
+            -x {params.index} \
+            -1 {input.r1} \
+            -2 {input.r2} \
+            --threads {threads} \
+            --un-conc-gz host_removed/{wildcards.sample}_R%.fastq.gz \
+            -S /dev/null \
+            2> {log}
+        """
+
+
+rule spades_viral:
+    input:
+        r1 = "host_removed/{sample}_R1.fastq.gz",
+        r2 = "host_removed/{sample}_R2.fastq.gz"
+    output:
+        contigs = "viral_assembly/{sample}/contigs.fasta"
+    params:
+        outdir = "viral_assembly/{sample}",
+        memory = config["spades"]["memory"]
+    threads: config["spades"]["threads"]
+    log:
+        "logs/viral_spades/{sample}.log"
+    shell:
+        """
+        spades.py \
+            -1 {input.r1} \
+            -2 {input.r2} \
+            -o {params.outdir} \
+            --threads {threads} \
+            --memory {params.memory} \
+            --rnaviral \
+            2> {log}
+        """
+
+
+rule kraken2:
+    input:
+        contigs = "viral_assembly/{sample}/contigs.fasta"
+    output:
+        report = "viral_classification/{sample}/report.txt",
+        out    = "viral_classification/{sample}/output.txt"
+    params:
+        db         = config["kraken2"]["database"],
+        confidence = config["kraken2"]["confidence"]
+    threads: config["kraken2"]["threads"]
+    log:
+        "logs/kraken2/{sample}.log"
+    shell:
+        """
+        kraken2 \
+            --db {params.db} \
+            --confidence {params.confidence} \
+            --threads {threads} \
+            --report {output.report} \
+            --output {output.out} \
+            {input.contigs} \
+            2> {log}
+        """
+
+
+rule quast:
+    input:
+        "viral_assembly/{sample}/contigs.fasta"
+    output:
+        "viral_assembly/{sample}/quast/report.html"
+    params:
+        outdir     = "viral_assembly/{sample}/quast",
+        min_contig = config["quast"]["min_contig"]
+    threads: config["quast"]["threads"]
+    log:
+        "logs/viral_quast/{sample}.log"
+    shell:
+        """
+        quast.py {input} \
+            -o {params.outdir} \
+            --min-contig {params.min_contig} \
+            --threads {threads} \
+            2> {log}
+        """

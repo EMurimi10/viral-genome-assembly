@@ -1,0 +1,35 @@
+# ── Samples ──────────────────────────────
+samples:
+  - vsample1
+  - vsample2
+  - vsample3
+
+# ── Directories ──────────────────────────
+reads_dir: "viral_reads"
+
+# ── Host Reference ────────────────────────
+host:
+  index: "host_ref/GRCh38_noalt_as/GRCh38_noalt_as"
+
+# ── Trimmomatic ───────────────────────────
+trimmomatic:
+  sliding_window: "4:20"
+  min_len: 50
+  leading: 3
+  trailing: 3
+
+# ── SPAdes ────────────────────────────────
+spades:
+  threads: 4
+  memory: 8
+
+# ── Kraken2 ───────────────────────────────
+kraken2:
+  database: "kraken2_db"
+  threads: 4
+  confidence: 0.1
+
+# ── QUAST ─────────────────────────────────
+quast:
+  threads: 4
+  min_contig: 200
