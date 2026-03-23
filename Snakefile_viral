@@ -54,6 +54,7 @@ rule trim:
     shell:
         """
         trimmomatic PE \
+            -phred33 \
             -threads {threads} \
             {input.r1} {input.r2} \
             {output.r1} {output.r1_unpaired} \

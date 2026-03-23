@@ -4,6 +4,15 @@ host_removed/
 viral_assembly/
 host_ref/
 
+# Kraken2 database — too large
+kraken2_db/
+
+# QC outputs — generated files
+viral_qc/
+
+# Classification outputs
+viral_classification/
+
 # Snakemake
 .snakemake/
 
